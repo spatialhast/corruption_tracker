@@ -1,12 +1,9 @@
-import json
 
 from django.http import HttpResponse
-from django.utils.safestring import mark_safe
-
-
+from django.contrib.gis.geos import fromstr
+from django.db.models.signals import post_save, post_delete
 from geoinfo.models import Polygon
-from geoinfo.serializers import extractor
-from claim.models import Organization, OrganizationType
+from claim.models import Claim, Organization, OrganizationType
 
 
 # def export_layer(request, layer_id):
@@ -17,12 +14,6 @@ from claim.models import Organization, OrganizationType
 #     responce['Content-Disposition'] = 'attachment; filename=%s.json' % layer.name
 #     return responce
 
-
-def get_polygons_tree(request, polygon_id):
-    data = mark_safe(json.dumps(extractor(polygon_id)))
-    return HttpResponse(data, content_type='application/json')
-
-
 def add_org(request):
     print(request.POST)
 
@@ -31,7 +22,8 @@ def add_org(request):
 
     polygon = Polygon(
         polygon_id=request.POST['centroid'],
-        centroid=request.POST['centroid'],
+        centroid=fromstr("POINT(%s %s)" % tuple(request.POST['centroid'].split(','))),
+        shape=request.POST['shape'],
         address=request.POST['address'],
         layer=layer,
         level=Polygon.building,
@@ -50,3 +42,43 @@ def add_org(request):
     polygon.organizations.add(organization)
 
     return HttpResponse(status=201)
+
+
+
+
+def increment_claims(sender, instance, created, **kwargs):
+    if created:
+        houses = instance.organization.polygon_set.all()
+        for house in houses:
+            house.claims += 1
+            house.save()
+            # add to district
+            house.layer.claims += 1
+            house.layer.save()
+            # add to city
+            house.layer.layer.claims += 1
+            house.layer.layer.save()
+            # add to region
+            house.layer.layer.layer.claims += 1
+            house.layer.layer.layer.save()       
+
+# post_save.connect(increment_claims, sender=Claim)
+
+
+
+def decrement_claims(sender, instance, **kwargs):
+    houses = instance.organization.polygon_set.all()
+    for house in houses:
+        house.claims -= 1
+        house.save()
+        # sub from district
+        house.layer.claims -= 1
+        house.layer.save()
+        # sub from city
+        house.layer.layer.claims -= 1
+        house.layer.layer.save()
+        # sub from region
+        house.layer.layer.layer.claims -= 1
+        house.layer.layer.layer.save()       
+
+# post_delete.connect(decrement_claims, sender=Claim)

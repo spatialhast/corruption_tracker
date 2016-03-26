@@ -7,14 +7,15 @@ from claim.models import Claim, InCharge,\
 class ClaimAdmin(admin.ModelAdmin):
     list_display = ('id', 'organization', 'servant',
                     'claim_type', 'text', 'live',
-                    'complainer', 'moderation', 'created')
+                    'complainer', 'bribe', 'moderation', 'created')
     search_fields = ('organization', 'servant', 'text')
     list_filter = ('organization', 'created')
 
 
 class OrganizationAdmin(admin.ModelAdmin):
     list_display = ('id', 'name', 'org_type',
-                    'first_polygon', 'total_claims', 'url')
+                    'first_polygon', 'total_claims', 'url',
+                    'updated')
     search_fields = ('name', 'org_type')
     list_filter = ('org_type',)
 

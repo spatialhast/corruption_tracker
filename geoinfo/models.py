@@ -1,4 +1,4 @@
-import json
+import json, datetime
 from pprint import pprint
 
 from django.contrib.gis.db import models
@@ -34,7 +34,7 @@ class Polygon(models.Model):
     polygon_id = models.CharField(max_length=50, primary_key=True)
     organizations = models.ManyToManyField(Organization, blank=True)
     shape = models.PolygonField(null=True, blank=True)
-    centroid = models.CharField(max_length=50, null=True, blank=True)
+    centroid = models.PointField(null=True, blank=True)
     address = models.CharField(max_length=800, null=True, blank=True)
     layer = models.ForeignKey('self', blank=True, null=True)
 
@@ -56,11 +56,23 @@ class Polygon(models.Model):
     zoom = models.IntegerField(blank=True, null=True)
 
     is_verified = models.BooleanField(default=True)
+    updated = models.DateTimeField(auto_now=True)
+
+    claims = models.IntegerField(default=0)
     objects = models.GeoManager()
+
 
     @property
     def total_claims(self):
-        return sum([x.total_claims for x in self.organizations.all()])
+        claims = 0
+        if self.level == self.building:
+            claims += sum([x.total_claims for x in self.organizations.all()])
+        else:
+            childs = self.polygon_set.all()
+            for child in childs:
+                claims += child.total_claims
+    
+        return claims
 
     # def orgs_count(self):
     #     return self.organizations.all().count()
@@ -72,36 +84,52 @@ class Polygon(models.Model):
         else:
             return None
 
-    def polygon_to_json(self):
-        orgs = []
-        polygon_claims = 0
-        for org in self.organizations.all():
-            org_claims = org.total_claims
-            polygon_claims += org_claims
-            orgs.append({'id': org.id,
-                        'name': org.name,
-                         'claims_count': org_claims})
-
+    def polygon_to_json(self, shape=True):
         # reverse coordinates for manualy adding polgygons
-        if self.shape:
+        if shape and self.shape:
             geometry = json.loads(self.shape.json)
             [x.reverse() for x in geometry["coordinates"][0]]
         else:
             geometry = None
 
-        centroid = self.centroid.split(',')
+        centroid = list(self.centroid.coords)
         centroid.reverse()
 
-        return {
+        responce = {
             "type": "Feature",
             "properties": {
-                "ID": self.polygon_id,
-                "organizations": orgs,
+                "ID": self.polygon_id,                
                 "centroid": centroid,
-                "polygon_claims": polygon_claims
+                'address': self.address,
+                'parent_id': self.layer.polygon_id if self.layer else None,
+                'level': self.level,
+                # "polygon_claims": self.claims
             },
             "geometry": geometry
         }
+
+        if self.level == self.building:
+            orgs = []
+            polygon_claims = 0
+            for org in self.organizations.all():
+                org_claims = org.total_claims
+                polygon_claims += org_claims
+                orgs.append({'id': org.id,
+                            'name': org.name,
+                             'claims_count': org_claims,
+                             # 'claim_types': org.claim_types()
+                             'org_type_id': org.org_type.type_id
+                             })
+
+            responce["properties"]["organizations"] = orgs
+            responce["properties"]["polygon_claims"] = polygon_claims
+
+        else:
+            responce["properties"]["polygon_claims"] = self.total_claims
+
+        # print(responce)
+        return responce
+
 
     def color_spot(self, value, max_value):
         percent = value * 100 / max_value
@@ -131,35 +159,15 @@ class Polygon(models.Model):
             polygon_json["properties"]['color'] = self.color_spot(
                 polygon_claims, max_claims_value)\
                 if polygon_claims else 'grey'
-            data.append(polygon_json)            
+            data.append(polygon_json)
             for org in polygon.organizations.all():
                 places.append({'data': org.id,
-                            'value': org.name,
-                            "centroid": polygon_json["properties"]['centroid'],
-                            'org_type_id': org.org_type.type_id if org.org_type else 0})
-
-
-
-        # organizations = []
-        # for polygon in polygons:
-        #     polygon_json = polygon.polygon_to_json()
-        #     polygon_claims = polygon_json["properties"]['polygon_claims']
-        #     polygon_json["properties"]['color'] = self.color_spot(
-        #         polygon_claims, max_claims_value)\
-        #         if polygon_claims else 'grey'
-        #     data.append(polygon_json)
-        #     organizations.extend(polygon.organizations.all())
-
-        # places = [{'data': org.id,
-        #           'value': org.name,
-        #            'org_type_id': org.org_type.type_id if org.org_type else 0}
-        #           for org in organizations]
-
-
+                               'value': org.name,
+                               "centroid": polygon_json["properties"]['centroid'],
+                               'org_type_id': org.org_type.type_id if org.org_type else 0})
 
         responce = {'data': data,
                     'places': places}
-
 
         if add:
             org_types = OrganizationType.objects.filter(
@@ -200,8 +208,7 @@ class Polygon(models.Model):
             responce = self.generate_childs(add)
 
         # pprint(responce)
-
-        center = self.centroid.split(',')
+        center = list(self.centroid.coords)
         center.reverse()
         geo_json = {
             'type': "FeatureCollection",

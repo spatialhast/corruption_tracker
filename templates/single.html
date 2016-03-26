@@ -69,6 +69,11 @@
                 <input type="text" class="form-control" id="centroid" name="centroid" placeholder='36.2543045,50.0075170' required>
             </div>
             <div class="form-group">
+                <label for="shape">{% trans "Building shape" %}:</label>
+                <div id='shape_error'></div>
+                <textarea type="text" class="form-control" id="shape" name="shape" placeholder='{ "type": "Polygon", "coordinates": [ [ [ 36.236753463843954, 50.006170131432199 ], [ 36.236990304344928, 50.006113443092367 ], [ 36.236866409713009, 50.005899627208827 ], [ 36.236629569212049, 50.00595631580083 ], [ 36.236753463843954, 50.006170131432199 ] ] ] }'  style="height: 200px" ;></textarea>
+            </div>
+            <div class="form-group">
                 <label for="address">{% trans "Address" %}:</label>
                 <input type="text" class="form-control" id="address" name="address" placeholder='{% trans "Address" %}' required>
             </div>
@@ -123,6 +128,10 @@
                     <div id='claim_text_error'></div>
                     <textarea type="text" class="form-control" id="claim_text" name="claim_text" required></textarea>
                 </div>
+                <div class="form-group">
+                    <label for="bribe">{% trans "Bribe amount" %}:</label>
+                    <input type="text" class="form-control" id="bribe" name="bribe" required>
+                </div>
 
                 {% if user.is_authenticated %}
                     <div class="form-group">
@@ -168,6 +177,7 @@
         <div class="complainer"><b>{% trans "Complainer" %}:</b> <span>%complainer%</span></div>
         <div class="servant"><b>{% trans "Servant" %}:</b> <span>%servant%</span></div>
         <div class="claim_type"><b>{% trans "Claim type" %}:</b> <span>%claim_type%</span></div>
+        <div class="bribe"><b>{% trans "Bribe amount" %}:</b> <span>%bribe%</span></div>
         <div class="claim"><b>{% trans "Claim text" %}:</b> <span>%text%</span></div>
         <div class="created"><b>{% trans "Created" %}:</b> <span>%created%</span></div>
         <hr>
